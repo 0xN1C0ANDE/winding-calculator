@@ -12,81 +12,91 @@
 #include <string.h>
 #include <math.h>
 
+typedef struct Variables {
+    char needForRes;
+    double widthMm, innerDiamMm, outerDiamMm, wireDiamMm, wireSectionMm2, wireLengthMm, wireResistance, resistivity;
+    char providedFields;
+} variables;
+
+int getVariables(variables *var);
+int dataChecker(variables *var);
+void solver(variables *var);
 void printHelpScreen(void);
 
 int main(int argc, char* argv[]) {
-    char needForRes;
-    double widthMm, innerDiamMm, outerDiamMm, wireDiamMm, wireSectionMm2, wireLengthMm, wireResistance, resistivity = 0;
-    char providedFields = 0;
+
+    variables var = {0};
 
     if(argc == 2 && !strncmp(argv[1], "-h", 10)) printHelpScreen();
     
-    //Retrieve details
-    printf("Need for resistance ? [Y/N]\n");
-    if(!scanf("%c[YN]", &needForRes)) return 1;
+    getVariables(&var);
 
-    printf("Please provide winding dimensions [mm] as follow: \"width-innerDiameter-outerDiameter\"\n");
-    printf("(Use 0 for unknowns)\n");
-    if(scanf("%lf-%lf-%lf", &widthMm, &innerDiamMm, &outerDiamMm) != 3) return 1;
+    dataChecker(&var);
 
-    if(needForRes == 'Y') {
-        printf("Please provide wire diameter[mm] OR section area [mm2] as follow: \"wireDiameter-wireSection\"\n");
-        printf("(Use 0 for unknown)\n");
-        if(scanf("%lf-%lf", &wireDiamMm, &wireSectionMm2) != 2) return 1;
-
-        printf("Please provide wire length[mm], resistance[ohm] and optionaly material resistivity[ohm*m] as follow: \"wireLength-wireResistance-()\"\n");
-        printf("(Default resistivity %lf[ohm*m] (Copper @ 20ºC))\n", COPPER_RESISTIVITY);
-        printf("(Use 0 for unknowns)\n");
-        if(scanf("%lf-%lf-%lf", &wireLengthMm, &wireResistance, &resistivity) < 2) return 1;
-
-    } else {
-        printf("Please provide wire length in [mm]:\n");
-        if(scanf("%lf", &wireLengthMm) != 1) return 1;
-    }
-
-    //Check for inconsistencies in the variables
-    if(widthMm < 0 || innerDiamMm < 0 || outerDiamMm < 0 || wireDiamMm < 0 || wireSectionMm2 < 0 || wireLengthMm < 0 || wireResistance < 0 || resistivity < 0) {
-        printf("invalid value");
-        return 1;
-    }
-    if(widthMm <= 0 && innerDiamMm <= 0) {
-        printf("width and inner diameter are mandatory");
-        return 1;
-    }
-
-    if(widthMm > 0)         providedFields |= 0x80;
-    if(innerDiamMm > 0)     providedFields |= 0x40;
-    if(outerDiamMm > 0)     providedFields |= 0x20;
-    if(wireDiamMm > 0)      providedFields |= 0x10;
-    if(wireSectionMm2 > 0)  providedFields |= 0x08;
-    if(wireLengthMm > 0)    providedFields |= 0x04;
-    if(wireResistance > 0)  providedFields |= 0x02;
-    if(resistivity > 0)     providedFields |= 0x01;
-
-    if(needForRes == 'Y') {
-        char diamResistanceField = providedFields & 0x16; //extract wireDiam, wireLengthMm and wireResistance
-        char sectionResistanceField = providedFields & 0x0D; //extract wireSection, wireLengthMm and wireResistance
-        if(!(diamResistanceField == 0x06 || diamResistanceField == 0x12 || diamResistanceField == 0x14) || !(sectionResistanceField == 0x06 || sectionResistanceField == 0x0A || sectionResistanceField == 0x0C)) {
-            printf("Missing variable(s) for solving resistance equation to determine wire length");
-            return 1;
-        }
-    } else {
-        if(!(providedFields & 0x04)) {
-            printf("Missing variable for wire length");
-            return 1;
-        }
-    }
-
-    //width and inner diameter spool dimensions are mandatory
-    //wire Diam and wireLengthMm are needed along with widthMm
-    
-
-
+    solver(&var);
 
     return 0;
 }
 
- void printHelpScreen(void) {}
+int getVariables(variables *var) {
+    printf("Need for resistance ? [Y/N]\n");
+    if(!scanf("%c[YN]", &var->needForRes)) return 1;
+
+    printf("Please provide winding dimensions [mm] as follow: \"width-innerDiameter-outerDiameter\"\n");
+    printf("(Use 0 for unknowns)\n");
+    if(scanf("%lf-%lf-%lf", &var->widthMm, &var->innerDiamMm, &var->outerDiamMm) != 3) return 1;
+
+    if(var->needForRes == 'Y') {
+        printf("Please provide wire diameter[mm] OR section area [mm2] as follow: \"wireDiameter-wireSection\"\n");
+        printf("(Use 0 for unknown)\n");
+        if(scanf("%lf-%lf", &var->wireDiamMm, &var->wireSectionMm2) != 2) return 1;
+
+        printf("Please provide wire length[mm], resistance[ohm] and optionaly material resistivity[ohm*m] as follow: \"wireLength-wireResistance-()\"\n");
+        printf("(Default resistivity %lf[ohm*m] (Copper @ 20ºC))\n", COPPER_RESISTIVITY);
+        printf("(Use 0 for unknowns)\n");
+        if(scanf("%lf-%lf-%lf", &var->wireLengthMm, &var->wireResistance, &var->resistivity) < 2) return 1;
+
+    } else {
+        printf("Please provide wire length in [mm]:\n");
+        if(scanf("%lf", &var->wireLengthMm) != 1) return 1;
+    }
+    return 0;
+}
+
+int dataChecker(variables *var) {
+    //Check for inconsistencies in the variables
+    printf("Check...\n");
+    if(var->widthMm < 0 || var->innerDiamMm < 0 || var->outerDiamMm < 0 || var->wireDiamMm < 0 || var->wireSectionMm2 < 0 || var->wireLengthMm < 0 || var->wireResistance < 0 || var->resistivity < 0) {
+        printf("invalid value");
+        return 1;
+    }
+
+    //saved what we have
+    if(var->widthMm > 0)         var->providedFields |= 0x80;
+    if(var->innerDiamMm > 0)     var->providedFields |= 0x40;
+    if(var->outerDiamMm > 0)     var->providedFields |= 0x20;
+    if(var->wireDiamMm > 0)      var->providedFields |= 0x10;
+    if(var->wireSectionMm2 > 0)  var->providedFields |= 0x08;
+    if(var->wireLengthMm > 0)    var->providedFields |= 0x04;
+    if(var->wireResistance > 0)  var->providedFields |= 0x02;
+    if(var->resistivity > 0)     var->providedFields |= 0x01;
+
+    return 0;
+}
+
+void solver(variables *var) {
+    if(var->needForRes == 'Y') {
+        while(!(~var->providedFields)) {
+            printf("Solving with resistance...");
+        }
+    } else {
+        while((~var->providedFields)) {
+            printf("Solving... %x\n", ~var->providedFields);
+        }
+    }
+}
+
+void printHelpScreen(void) {}
 /*
     printf("
                        _           _ _                                 _            _       _             
