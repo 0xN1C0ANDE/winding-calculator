@@ -49,6 +49,10 @@ int main(int argc, char* argv[]) {
         printf("invalid value");
         return 1;
     }
+    if(widthMm <= 0 && innerDiamMm <= 0) {
+        printf("width and inner diameter are mandatory");
+        return 1;
+    }
 
     if(widthMm > 0)         providedFields |= 0x80;
     if(innerDiamMm > 0)     providedFields |= 0x40;
@@ -73,7 +77,8 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    //to be continued with spool dimensions
+    //width and inner diameter spool dimensions are mandatory
+    //wire Diam and wireLengthMm are needed along with widthMm
     
 
 
