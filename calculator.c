@@ -3,25 +3,14 @@
     * @file calculator.c
     * @author Nicolas Andersson
     * @date 21.11.23
- */
+    * @todo detection of variables conflicts
+*/
 
-#define COPPER_RESISTIVITY 1.68E-8 // roh: ohm-meter
-
+#include <calculator.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-
-typedef struct Variables {
-    char needForRes;
-    double widthMm, innerDiamMm, outerDiamMm, wireDiamMm, wireSectionMm2, wireLengthMm, wireResistance, resistivity;
-    char providedFields;
-} variables;
-
-int getVariables(variables *var);
-int dataChecker(variables *var);
-void solver(variables *var);
-void printHelpScreen(void);
 
 int main(int argc, char* argv[]) {
 
@@ -30,9 +19,7 @@ int main(int argc, char* argv[]) {
     if(argc == 2 && !strncmp(argv[1], "-h", 10)) printHelpScreen();
     
     getVariables(&var);
-
     dataChecker(&var);
-
     solver(&var);
 
     return 0;
@@ -42,9 +29,9 @@ int getVariables(variables *var) {
     printf("Need for resistance ? [Y/N]\n");
     if(!scanf("%c[YN]", &var->needForRes)) return 1;
 
-    printf("Please provide winding dimensions [mm] as follow: \"width-innerDiameter-outerDiameter\"\n");
+    printf("Please provide winding turns and dimensions[mm] as follow: \"turns-width-innerDiameter-outerDiameter\"\n");
     printf("(Use 0 for unknowns)\n");
-    if(scanf("%lf-%lf-%lf", &var->widthMm, &var->innerDiamMm, &var->outerDiamMm) != 3) return 1;
+    if(scanf("%lf-%lf-%lf-%lf", &var->windingTurns, &var->widthMm, &var->innerDiamMm, &var->outerDiamMm) != 3) return 1;
 
     if(var->needForRes == 'Y') {
         printf("Please provide wire diameter[mm] OR section area [mm2] as follow: \"wireDiameter-wireSection\"\n");
@@ -66,33 +53,118 @@ int getVariables(variables *var) {
 int dataChecker(variables *var) {
     //Check for inconsistencies in the variables
     printf("Check...\n");
-    if(var->widthMm < 0 || var->innerDiamMm < 0 || var->outerDiamMm < 0 || var->wireDiamMm < 0 || var->wireSectionMm2 < 0 || var->wireLengthMm < 0 || var->wireResistance < 0 || var->resistivity < 0) {
+    if(var->widthMm < 0 || var->innerDiamMm < 0 || var->outerDiamMm < 0 || var->windingTurns < 0 || var->wireDiamMm < 0 || var->wireSectionMm2 < 0 || var->wireLengthMm < 0 || var->wireResistance < 0 || var->resistivity < 0) {
         printf("invalid value");
         return 1;
     }
 
     //saved what we have
-    if(var->widthMm > 0)         var->providedFields |= 0x80;
-    if(var->innerDiamMm > 0)     var->providedFields |= 0x40;
-    if(var->outerDiamMm > 0)     var->providedFields |= 0x20;
-    if(var->wireDiamMm > 0)      var->providedFields |= 0x10;
-    if(var->wireSectionMm2 > 0)  var->providedFields |= 0x08;
-    if(var->wireLengthMm > 0)    var->providedFields |= 0x04;
-    if(var->wireResistance > 0)  var->providedFields |= 0x02;
-    if(var->resistivity > 0)     var->providedFields |= 0x01;
+    if(var->widthMm > 0)         var->providedFields |= WIDTHMM_BIT;
+    if(var->innerDiamMm > 0)     var->providedFields |= INNERDIAM_BIT;
+    if(var->outerDiamMm > 0)     var->providedFields |= OUTERDIAM_BIT;
+    if(var->windingTurns > 0)    var->providedFields |= WINDINGTURNS_BIT;
+    if(var->wireDiamMm > 0)      var->providedFields |= WIREDIAMMM_BIT;
+    if(var->wireSectionMm2 > 0)  var->providedFields |= WIRESECTIONMM2_BIT;
+    if(var->wireLengthMm > 0)    var->providedFields |= WIRELENGTHMM_BIT;
+    if(var->wireResistance > 0)  var->providedFields |= WIRERESISTANCE_BIT;
 
     return 0;
 }
 
 void solver(variables *var) {
     if(var->needForRes == 'Y') {
-        while(!(~var->providedFields)) {
-            printf("Solving with resistance...");
+        while(~var->providedFields) {
+            printf("Solving with resistance... %x\n", ~var->providedFields);
+            solveEquation_wireDiam_wireSectionMm2(&var);
+            solveEquation_wireResistance_resistivity_wireLengthMm_wireSectionMm2(&var);
+            solveEquation_windingTurns_widthMm_innerDiamMm_outerDiamMm_wireDiamMm_wireLengthMm(&var);
         }
     } else {
-        while((~var->providedFields)) {
+        while(~var->providedFields) {
             printf("Solving... %x\n", ~var->providedFields);
+            solveEquation_wireDiam_wireSectionMm2(&var);
+            solveEquation_windingTurns_widthMm_innerDiamMm_outerDiamMm_wireDiamMm_wireLengthMm(&var);
         }
+    }
+}
+
+void solveEquation_wireDiamMm_wireSectionMm2(variables *var) {
+    //Calc wireDiamMm
+    if(var->providedFields & WIRESECTIONMM2_BIT && ~var->providedFields & WIREDIAMMM_BIT) {
+        var->wireDiamMm = sqrt(var->wireSectionMm2);
+        var->providedFields |= WIREDIAMMM_BIT;
+    }
+    //Calc wireSectionMm2
+    if(var->providedFields & WIREDIAMMM_BIT && ~var->providedFields & WIRESECTIONMM2_BIT) {
+        var->wireSectionMm2 = var->wireDiamMm*var->wireDiamMm;
+        var->providedFields |= WIRESECTIONMM2_BIT;
+    }
+}
+
+void solveEquation_wireResistance_resistivity_wireLengthMm_wireSectionMm2(variables *var) {
+    //Set resistivity
+    if(!var->resistivity) var->resistivity = COPPER_RESISTIVITY;
+
+    //Calc wireResistance
+    if(var->providedFields & (WIRELENGTHMM_BIT & WIRESECTIONMM2_BIT) && ~var->providedFields & WIRERESISTANCE_BIT) {
+        var->wireResistance = var->resistivity*(var->wireLengthMm/var->wireSectionMm2);
+        var->providedFields |= WIRERESISTANCE_BIT;
+    }
+    //Calc wireLengthMm
+    if(var->providedFields & (WIRERESISTANCE_BIT & WIRESECTIONMM2_BIT) && ~var->providedFields & WIRELENGTHMM_BIT) {
+        var->wireLengthMm = var->wireResistance/var->resistivity*var->wireSectionMm2;
+        var->providedFields |= WIRELENGTHMM_BIT;
+    }
+    //Calc  wireSectionMm2
+    if(var->providedFields & (WIRERESISTANCE_BIT & WIRELENGTHMM_BIT) && ~var->providedFields & WIRESECTIONMM2_BIT) {
+        var->wireSectionMm2 = var->wireResistance/var->resistivity/var->wireLengthMm;
+        var->providedFields |= WIRESECTIONMM2_BIT;
+    }
+}
+
+void solveEquation_windingTurns_widthMm_innerDiamMm_outerDiamMm_wireDiamMm_wireLengthMm(variables *var) {
+    //Calc windingTurns
+    if(var->providedFields & (WIDTHMM_BIT & INNERDIAM_BIT & OUTERDIAM_BIT & WIREDIAMMM_BIT & WIRELENGTHMM_BIT) && ~var->providedFields & WINDINGTURNS_BIT) {
+        double t = 0;
+        double currWindingDiamMM = var->wireDiamMm + var->wireDiamMm;
+
+        while(var->wireLengthMm > 0) {
+            double tInLayer = 0;
+
+            if(var->wireLengthMm >= M_PI*currWindingDiamMM*var->widthMm/var->wireDiamMm) {
+                //Full layer
+                tInLayer = var->widthMm/var->wireDiamMm;
+            } else {
+                //Partial layer
+                tInLayer = var->wireLengthMm/M_PI*currWindingDiamMM;
+            }
+
+            t += tInLayer;
+            var->wireLengthMm -= M_PI*currWindingDiamMM*tInLayer;
+            currWindingDiamMM += var->wireDiamMm;
+        }
+
+        var->windingTurns = t;
+    }
+    //Calc widthMm
+    if(var->providedFields & (WINDINGTURNS_BIT & INNERDIAM_BIT & OUTERDIAM_BIT & WIREDIAMMM_BIT & WIRELENGTHMM_BIT) && ~var->providedFields & WIDTHMM_BIT) {
+        
+    }
+    //Calc innerDiamMm
+    if(var->providedFields & (WINDINGTURNS_BIT & WIDTHMM_BIT & OUTERDIAM_BIT & WIREDIAMMM_BIT & WIRELENGTHMM_BIT) && ~var->providedFields & WINDINGTURNS_BIT) {
+        
+    }
+    //Calc outerDiamMm
+    if(var->providedFields & (WINDINGTURNS_BIT & WIDTHMM_BIT & INNERDIAM_BIT & WIREDIAMMM_BIT & WIRELENGTHMM_BIT) && ~var->providedFields & WIDTHMM_BIT) {
+        
+    }
+    //Calc wireDiamMm
+    if(var->providedFields & (WINDINGTURNS_BIT & WIDTHMM_BIT & OUTERDIAM_BIT & INNERDIAM_BIT & WIRELENGTHMM_BIT) && ~var->providedFields & WIDTHMM_BIT) {
+        
+    }
+    //Calc wireLength
+    if(var->providedFields & (WINDINGTURNS_BIT & WIDTHMM_BIT & OUTERDIAM_BIT & INNERDIAM_BIT & WIREDIAMMM_BIT) && ~var->providedFields & WIDTHMM_BIT) {
+        
     }
 }
 
