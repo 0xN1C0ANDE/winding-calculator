@@ -28,6 +28,7 @@ typedef struct Variables {
 int getVariables(variables *var);
 int dataChecker(variables *var);
 void solver(variables *var);
+int bitCounter(char bitPattern);
 void solveEquation_wireDiam_wireSectionMm2(variables *var);
 void solveEquation_wireResistance_resistivity_wireLengthMm_wireSectionMm2(variables *var);
 void solveEquation_windingTurns_widthMm_innerDiamMm_outerDiamMm_wireDiamMm_wireLengthMm(variables *var);

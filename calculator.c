@@ -58,6 +58,12 @@ int dataChecker(variables *var) {
         return 1;
     }
 
+    if(var->wireDiamMm > 0 && var->wireSectionMm2 > 0) {
+        printf("Please provide only wireDiamMm or wireSectionMm2");
+        var->wireSectionMm2 = 0;
+        return 1;
+    }
+
     //saved what we have
     if(var->widthMm > 0)         var->providedFields |= WIDTHMM_BIT;
     if(var->innerDiamMm > 0)     var->providedFields |= INNERDIAM_BIT;
@@ -73,19 +79,37 @@ int dataChecker(variables *var) {
 
 void solver(variables *var) {
     if(var->needForRes == 'Y') {
-        while(~var->providedFields) {
-            printf("Solving with resistance... %x\n", ~var->providedFields);
-            solveEquation_wireDiam_wireSectionMm2(var);
-            solveEquation_wireResistance_resistivity_wireLengthMm_wireSectionMm2(var);
-            solveEquation_windingTurns_widthMm_innerDiamMm_outerDiamMm_wireDiamMm_wireLengthMm(var);
+        if(bitCounter(var->providedFields) < 6) {
+            printf("Too many unknowns");
+        } else {
+            while(~var->providedFields) {
+                printf("Solving with resistance...\n");
+                solveEquation_wireDiam_wireSectionMm2(var);
+                solveEquation_wireResistance_resistivity_wireLengthMm_wireSectionMm2(var);
+                solveEquation_windingTurns_widthMm_innerDiamMm_outerDiamMm_wireDiamMm_wireLengthMm(var);
+            }
         }
+        
     } else {
-        while(~var->providedFields) {
-            printf("Solving... %x\n", ~var->providedFields);
-            solveEquation_wireDiam_wireSectionMm2(var);
-            solveEquation_windingTurns_widthMm_innerDiamMm_outerDiamMm_wireDiamMm_wireLengthMm(var);
+        if(bitCounter(var->providedFields) < 5) {
+            printf("Too many unknowns");
+        } else {
+            while(~var->providedFields) {
+                printf("Solving...\n");
+                solveEquation_wireDiam_wireSectionMm2(var);
+                solveEquation_windingTurns_widthMm_innerDiamMm_outerDiamMm_wireDiamMm_wireLengthMm(var);
+            }
         }
     }
+}
+
+int bitCounter(char bitPattern) {
+    //Not counting bit 0 because not interested in resistivity
+    int c=0;
+    for(int i=1, i<=7, i++) {
+        if((bitPattern >> i) & 0x01) c++;
+    }
+    return c;
 }
 
 void solveEquation_wireDiam_wireSectionMm2(variables *var) {
