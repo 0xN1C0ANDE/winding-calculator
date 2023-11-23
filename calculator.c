@@ -6,7 +6,7 @@
     * @todo detection of variables conflicts
 */
 
-#include <calculator.h>
+#include "calculator.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -75,20 +75,20 @@ void solver(variables *var) {
     if(var->needForRes == 'Y') {
         while(~var->providedFields) {
             printf("Solving with resistance... %x\n", ~var->providedFields);
-            solveEquation_wireDiam_wireSectionMm2(&var);
-            solveEquation_wireResistance_resistivity_wireLengthMm_wireSectionMm2(&var);
-            solveEquation_windingTurns_widthMm_innerDiamMm_outerDiamMm_wireDiamMm_wireLengthMm(&var);
+            solveEquation_wireDiam_wireSectionMm2(var);
+            solveEquation_wireResistance_resistivity_wireLengthMm_wireSectionMm2(var);
+            solveEquation_windingTurns_widthMm_innerDiamMm_outerDiamMm_wireDiamMm_wireLengthMm(var);
         }
     } else {
         while(~var->providedFields) {
             printf("Solving... %x\n", ~var->providedFields);
-            solveEquation_wireDiam_wireSectionMm2(&var);
-            solveEquation_windingTurns_widthMm_innerDiamMm_outerDiamMm_wireDiamMm_wireLengthMm(&var);
+            solveEquation_wireDiam_wireSectionMm2(var);
+            solveEquation_windingTurns_widthMm_innerDiamMm_outerDiamMm_wireDiamMm_wireLengthMm(var);
         }
     }
 }
 
-void solveEquation_wireDiamMm_wireSectionMm2(variables *var) {
+void solveEquation_wireDiam_wireSectionMm2(variables *var) {
     //Calc wireDiamMm
     if(var->providedFields & WIRESECTIONMM2_BIT && ~var->providedFields & WIREDIAMMM_BIT) {
         var->wireDiamMm = sqrt(var->wireSectionMm2);
