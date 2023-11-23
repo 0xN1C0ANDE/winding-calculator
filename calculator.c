@@ -7,10 +7,6 @@
 */
 
 #include "calculator.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
 
 int main(int argc, char* argv[]) {
 
@@ -18,8 +14,9 @@ int main(int argc, char* argv[]) {
 
     if(argc == 2 && !strncmp(argv[1], "-h", 10)) printHelpScreen();
     
-    getVariables(&var);
-    dataChecker(&var);
+    if(getVariables(&var) != 0) return 1;
+    if(dataChecker(&var) != 0) return 1;
+    printf("%X\n", (var.providedFields));
     solver(&var);
 
     return 0;
@@ -31,21 +28,25 @@ int getVariables(variables *var) {
 
     printf("Please provide winding turns and dimensions[mm] as follow: \"turns-width-innerDiameter-outerDiameter\"\n");
     printf("(Use 0 for unknowns)\n");
-    if(scanf("%lf-%lf-%lf-%lf", &var->windingTurns, &var->widthMm, &var->innerDiamMm, &var->outerDiamMm) != 3) return 1;
+    if(scanf("%lf-%lf-%lf-%lf", &var->windingTurns, &var->widthMm, &var->innerDiamMm, &var->outerDiamMm) != 4) return 1;
+    CLEAR_BUFFER
+
+    printf("Please provide wire diameter[mm] OR section area [mm2] as follow: \"wireDiameter-wireSection\"\n");
+    printf("(Use 0 for unknown)\n");
+    if(scanf("%lf-%lf", &var->wireDiamMm, &var->wireSectionMm2) != 2) return 1;
+    CLEAR_BUFFER
 
     if(var->needForRes == 'Y') {
-        printf("Please provide wire diameter[mm] OR section area [mm2] as follow: \"wireDiameter-wireSection\"\n");
-        printf("(Use 0 for unknown)\n");
-        if(scanf("%lf-%lf", &var->wireDiamMm, &var->wireSectionMm2) != 2) return 1;
-
         printf("Please provide wire length[mm], resistance[ohm] and optionaly material resistivity[ohm*m] as follow: \"wireLength-wireResistance-()\"\n");
         printf("(Default resistivity %lf[ohm*m] (Copper @ 20ºC))\n", COPPER_RESISTIVITY);
         printf("(Use 0 for unknowns)\n");
         if(scanf("%lf-%lf-%lf", &var->wireLengthMm, &var->wireResistance, &var->resistivity) < 2) return 1;
+        CLEAR_BUFFER
 
     } else {
         printf("Please provide wire length in [mm]:\n");
         if(scanf("%lf", &var->wireLengthMm) != 1) return 1;
+        CLEAR_BUFFER
     }
     return 0;
 }
@@ -54,12 +55,17 @@ int dataChecker(variables *var) {
     //Check for inconsistencies in the variables
     printf("Check...\n");
     if(var->widthMm < 0 || var->innerDiamMm < 0 || var->outerDiamMm < 0 || var->windingTurns < 0 || var->wireDiamMm < 0 || var->wireSectionMm2 < 0 || var->wireLengthMm < 0 || var->wireResistance < 0 || var->resistivity < 0) {
-        printf("invalid value");
+        printf("invalid value\n");
+        return 1;
+    }
+
+    if(var->innerDiamMm >= var->outerDiamMm && var->outerDiamMm != 0) {
+        printf("outerDiamMm cannot be smaller than innerDiamMm\n");
         return 1;
     }
 
     if(var->wireDiamMm > 0 && var->wireSectionMm2 > 0) {
-        printf("Please provide only wireDiamMm or wireSectionMm2");
+        printf("Please provide only wireDiamMm or wireSectionMm2\n");
         var->wireSectionMm2 = 0;
         return 1;
     }
@@ -80,10 +86,11 @@ int dataChecker(variables *var) {
 void solver(variables *var) {
     if(var->needForRes == 'Y') {
         if(bitCounter(var->providedFields) < 6) {
-            printf("Too many unknowns");
+            printf("Too many unknowns\n");
         } else {
-            while(~var->providedFields) {
+            while((uint8_t)~(var->providedFields | 0x01)) {
                 printf("Solving with resistance...\n");
+                printf("%X\n", var->providedFields);
                 solveEquation_wireDiam_wireSectionMm2(var);
                 solveEquation_wireResistance_resistivity_wireLengthMm_wireSectionMm2(var);
                 solveEquation_windingTurns_widthMm_innerDiamMm_outerDiamMm_wireDiamMm_wireLengthMm(var);
@@ -92,21 +99,24 @@ void solver(variables *var) {
         
     } else {
         if(bitCounter(var->providedFields) < 5) {
-            printf("Too many unknowns");
+            printf("Too many unknowns\n");
         } else {
-            while(~var->providedFields) {
+            while((uint8_t)~(var->providedFields | 0x03)) {
                 printf("Solving...\n");
+                printf("%X\n", ~(var->providedFields | 0x03));
+                printf("%X\n", (var->providedFields | 0x03));
                 solveEquation_wireDiam_wireSectionMm2(var);
                 solveEquation_windingTurns_widthMm_innerDiamMm_outerDiamMm_wireDiamMm_wireLengthMm(var);
+                var->providedFields = 0xFF;
             }
         }
     }
 }
 
-int bitCounter(char bitPattern) {
+int bitCounter(uint8_t bitPattern) {
     //Not counting bit 0 because not interested in resistivity
     int c=0;
-    for(int i=1, i<=7, i++) {
+    for(int i=1; i<=7; i++) {
         if((bitPattern >> i) & 0x01) c++;
     }
     return c;
@@ -169,6 +179,7 @@ void solveEquation_windingTurns_widthMm_innerDiamMm_outerDiamMm_wireDiamMm_wireL
         }
 
         var->windingTurns = t;
+        var->providedFields |= WINDINGTURNS_BIT;
     }
     //Calc widthMm
     if(var->providedFields & (WINDINGTURNS_BIT & INNERDIAM_BIT & OUTERDIAM_BIT & WIREDIAMMM_BIT & WIRELENGTHMM_BIT) && ~var->providedFields & WIDTHMM_BIT) {
